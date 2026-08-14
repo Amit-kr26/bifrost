@@ -3878,7 +3878,8 @@
               "minItems": 1,
               "items": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "maxLength": 2000
               }
             },
             "medium_keywords": {
@@ -3886,7 +3887,8 @@
               "minItems": 1,
               "items": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "maxLength": 2000
               }
             },
             "complex_keywords": {
@@ -3894,7 +3896,8 @@
               "minItems": 1,
               "items": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "maxLength": 2000
               }
             }
           },
