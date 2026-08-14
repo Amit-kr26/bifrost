@@ -458,6 +458,14 @@ func TestIsJSONContentType(t *testing.T) {
 	}
 }
 
+// The handler finds the governance plugin by type-asserting each base plugin
+// against governance.BaseGovernancePlugin, so a mock that falls behind the
+// interface stops being found — silently, and without a build failure. Minting
+// then skips governance entirely and every assertion below still reads as a
+// passing "no governance configured" path. This line turns that drift into a
+// compile error at the point the interface grows.
+var _ governance.BaseGovernancePlugin = (*mockRealtimeMintingGovernancePlugin)(nil)
+
 type mockRealtimeMintingGovernancePlugin struct {
 	err            *schemas.BifrostError
 	seenUserID     string
@@ -546,6 +554,9 @@ func (m *mockRealtimeMintingGovernancePlugin) ResolveAccess(_ *schemas.BifrostCo
 
 func (m *mockRealtimeMintingGovernancePlugin) LoadBalanceProvider(_ *schemas.BifrostContext, _ *schemas.BifrostRequest) error {
 	return nil
+}
+
+func (m *mockRealtimeMintingGovernancePlugin) AttributeRoutingEmbeddingCost(_ schemas.ModelProvider, _ string, _ int) {
 }
 
 func TestRealtimeClientSecretsEvaluateMintingGovernance_RequiresAccess(t *testing.T) {

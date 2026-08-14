@@ -50,3 +50,8 @@ func (m *MockGovernance) LoadBalanceProvider(_ *schemas.BifrostContext, req *sch
 	}
 	return m.LoadBalanceErr
 }
+
+// AttributeRoutingEmbeddingCost is a no-op; tests assert usage through the
+// warmup observer instead of the budget ledger.
+func (m *MockGovernance) AttributeRoutingEmbeddingCost(provider schemas.ModelProvider, model string, inputTokens int) {
+}
