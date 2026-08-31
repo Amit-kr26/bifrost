@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/maximhq/bifrost/core/providers/openai"
 	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 	schemas "github.com/maximhq/bifrost/core/schemas"
 	"github.com/valyala/fasthttp"
@@ -333,4 +334,26 @@ func (provider *DatabricksProvider) prepareRequest(ctx *schemas.BifrostContext, 
 	ctx.SetValue(schemas.BifrostContextKeyPassthroughExtraParams, true)
 	provider.applyGatewayTags(ctx, key)
 	return url, auth, nil
+}
+
+// chatStreamOptionsFixup drops stream_options for endpoints whose upstream model rejects it.
+//
+// Bifrost sets stream_options.include_usage on every OpenAI-shaped stream so the final chunk
+// carries token counts for cost attribution. Databricks forwards request fields it does not
+// itself consume straight to the serving model, and the Gemini-backed endpoints map those onto
+// Gemini's generation_config, which rejects unknown names — the request fails with
+// INVALID_ARGUMENT before a single chunk is produced. Those endpoints report usage on the final
+// chunk regardless, so dropping the field costs nothing.
+//
+// Returns nil for every other endpoint, leaving the shared handler's default in place.
+func chatStreamOptionsFixup(model string) func(*openai.OpenAIChatRequest) *openai.OpenAIChatRequest {
+	if !strings.Contains(strings.ToLower(model), "gemini") {
+		return nil
+	}
+	return func(reqBody *openai.OpenAIChatRequest) *openai.OpenAIChatRequest {
+		if reqBody != nil {
+			reqBody.StreamOptions = nil
+		}
+		return reqBody
+	}
 }
