@@ -100,6 +100,16 @@ export default function ProviderKeyForm({ provider, keyId, onCancel, onSave }: P
 			const { _auth_type, ...rest } = key.bedrock_mantle_key_config;
 			key.bedrock_mantle_key_config = rest;
 		}
+		if (key.databricks_key_config) {
+			const { _auth_type, ...rest } = key.databricks_key_config;
+			// On the personal access token path the service principal fields are inert; drop
+			// them so a half-filled pair is never persisted.
+			if (_auth_type !== "oauth_m2m") {
+				delete rest.client_id;
+				delete rest.client_secret;
+			}
+			key.databricks_key_config = rest;
+		}
 		const mutation = isEditing
 			? updateProviderKey({
 					provider: provider.name,
