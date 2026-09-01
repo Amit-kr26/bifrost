@@ -1902,7 +1902,7 @@ func backfillVirtualMCPEndpointSlugs(tx *gorm.DB) error {
 	}
 
 	for i := range rows {
-		slug := uniqueVirtualMCPSlug(virtualMCPSlugify(rows[i].Name), rows[i].ID, taken)
+		slug := uniqueVirtualMCPSlug(VirtualMCPSlugify(rows[i].Name), rows[i].ID, taken)
 		taken[slug] = true
 		if err := tx.Model(&tables.TableVirtualMCP{}).
 			Where("id = ?", rows[i].ID).
@@ -1913,9 +1913,9 @@ func backfillVirtualMCPEndpointSlugs(tx *gorm.DB) error {
 	return nil
 }
 
-// virtualMCPSlugify lowercases a name and collapses non-alphanumeric runs to
+// VirtualMCPSlugify lowercases a name and collapses non-alphanumeric runs to
 // single hyphens, trimmed at the ends.
-func virtualMCPSlugify(name string) string {
+func VirtualMCPSlugify(name string) string {
 	var b strings.Builder
 	prevHyphen := false
 	for _, r := range strings.ToLower(strings.TrimSpace(name)) {
