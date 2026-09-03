@@ -89,6 +89,12 @@ type RoutingPlugin struct {
 	configStore configstore.ConfigStore
 	logger      schemas.Logger
 	cleanupOnce sync.Once
+	// generationsCancel stops the background registration and sweep that
+	// reclaims exemplar generations no node is using.
+	generationsCancel context.CancelFunc
+	// generations answers what other nodes have claimed, so a manual deletion
+	// can refuse a generation still in use elsewhere.
+	generations *complexityGenerationRegistry
 
 	// Wired by the HTTP server after the bifrost client exists; see
 	// SetEmbeddingRequestExecutor / SetWarmupEmbedUsageObserver /
@@ -171,6 +177,36 @@ func InitFromStore(
 	}
 	if config != nil && config.KVStore != nil {
 		plugin.sessionStore = newComplexitySessionStore(config.KVStore, complexitySessionInactivityTTL)
+		// Peers sharing a vector store otherwise embed the same phrases against
+		// the same namespace at the same time, because a configuration change
+		// reaches every node at once and the marker that would let a late node
+		// skip the work is written last. Absent a KVStore this stays nil and each
+		// node warms independently, exactly as before.
+		if coordinator := newKVComplexityWarmCoordinator(config.KVStore, newRoutingNodeID()); coordinator != nil {
+			plugin.semanticClassifier.SetWarmCoordinator(coordinator)
+		}
+	}
+	// Remembering the measured embedding width is what lets a restart adopt an
+	// already-complete generation without calling the provider at all. It is
+	// persisted rather than held in the KVStore because it has to survive every
+	// node restarting at once, which is exactly when nothing is left in memory
+	// to ask.
+	if dimensions := newPersistentEmbeddingDimensionStore(ctx, configStore, logger); dimensions != nil {
+		plugin.semanticClassifier.SetEmbeddingDimensionStore(dimensions)
+	}
+	// Retired generations are reclaimed in the background. A node-local store
+	// drops its own immediately, but on a shared one a peer may still be serving
+	// a generation this node has retired, so nodes register what they use and
+	// only unclaimed namespaces are collected.
+	if registry := newComplexityGenerationRegistry(configStore, logger, newRoutingNodeID(), plugin); registry != nil {
+		registryCtx, cancel := context.WithCancel(ctx)
+		plugin.generationsCancel = cancel
+		plugin.generations = registry
+		// The classifier announces the namespace it is building through this,
+		// so a peer's sweep can see a generation under construction rather than
+		// only one already in service.
+		plugin.semanticClassifier.SetGenerationClaimer(registry)
+		go registry.Run(registryCtx)
 	}
 
 	var analyzerOverride *complexity.AnalyzerConfig
@@ -269,6 +305,38 @@ func (p *RoutingPlugin) ComplexitySemanticStatus() complexity.SemanticStatusInfo
 		return complexity.SemanticStatusInfo{State: complexity.SemanticStatusDisabled}
 	}
 	return p.semanticClassifier.Status()
+}
+
+// ListComplexityGenerations reports the exemplar generations held in the vector
+// store, flagging the one currently serving.
+func (p *RoutingPlugin) ListComplexityGenerations(ctx context.Context) ([]complexity.GenerationInfo, error) {
+	if p.semanticClassifier == nil {
+		return []complexity.GenerationInfo{}, nil
+	}
+	return p.semanticClassifier.ListGenerations(ctx)
+}
+
+// DeleteComplexityGeneration removes one retired exemplar generation.
+func (p *RoutingPlugin) DeleteComplexityGeneration(ctx context.Context, namespace string) error {
+	if p.semanticClassifier == nil {
+		// Reporting success here would tell an operator a generation was removed
+		// when nothing was even asked to remove it.
+		return complexity.ErrClassifierUnavailable
+	}
+	// The classifier can only see its own state, so on its own it would happily
+	// delete a generation another node is serving. The registry knows what every
+	// node has claimed, and is asked the same question the sweep asks before it
+	// reclaims anything.
+	if p.generations != nil {
+		claimed, err := p.generations.claimedByAnotherNode(ctx, namespace)
+		if err != nil {
+			return fmt.Errorf("could not check whether another node is serving %s: %w", namespace, err)
+		}
+		if claimed {
+			return fmt.Errorf("%w: another node is serving %s", complexity.ErrGenerationActive, namespace)
+		}
+	}
+	return p.semanticClassifier.DeleteGeneration(ctx, namespace)
 }
 
 // PreRequestHook evaluates routing rules, then materializes the virtual key's provider choice
@@ -478,6 +546,9 @@ func (p *RoutingPlugin) PostLLMHook(ctx *schemas.BifrostContext, resp *schemas.B
 // Cleanup implements schemas.BasePlugin.
 func (p *RoutingPlugin) Cleanup() error {
 	p.cleanupOnce.Do(func() {
+		if p.generationsCancel != nil {
+			p.generationsCancel()
+		}
 		if p.semanticClassifier != nil {
 			if err := p.semanticClassifier.Close(); err != nil {
 				p.logger.Warn("[Routing] failed to close semantic classifier: %v", err)
