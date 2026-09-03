@@ -1428,6 +1428,7 @@ func (h *MCPHandler) getMCPClientsPaginated(ctx *fasthttp.RequestCtx, params con
 		clientConfig := &schemas.MCPClientConfig{
 			ID:                     dbClient.ClientID,
 			Name:                   dbClient.Name,
+			EndpointSlug:           dbClient.EndpointSlug,
 			IsCodeModeClient:       dbClient.IsCodeModeClient,
 			ConnectionType:         schemas.MCPConnectionType(dbClient.ConnectionType),
 			ConnectionString:       dbClient.ConnectionString,
@@ -1861,6 +1862,7 @@ func (h *MCPHandler) addMCPClient(ctx *fasthttp.RequestCtx) {
 		schemasConfig := &schemas.MCPClientConfig{
 			ID:                     req.ClientID,
 			Name:                   req.Name,
+			EndpointSlug:           req.EndpointSlug,
 			IsCodeModeClient:       req.IsCodeModeClient,
 			IsPingAvailable:        &isPingAvailable,
 			NeedsSessionStickiness: req.NeedsSessionStickiness,
@@ -1895,6 +1897,14 @@ func (h *MCPHandler) addMCPClient(ctx *fasthttp.RequestCtx) {
 		if err := h.store.ConfigStore.CreateMCPClientConfig(ctx, schemasConfig); err != nil {
 			if errors.Is(err, configstore.ErrAlreadyExists) {
 				SendError(ctx, fasthttp.StatusConflict, "An MCP client with this name already exists")
+				return
+			}
+			if errors.Is(err, configstore.ErrMCPEndpointSlugExists) {
+				SendError(ctx, fasthttp.StatusConflict, "An MCP client with this endpoint slug already exists")
+				return
+			}
+			if errors.Is(err, configstore.ErrMCPEndpointSlugInvalid) {
+				SendError(ctx, fasthttp.StatusBadRequest, "Could not derive an endpoint slug from the name; provide an endpoint_slug")
 				return
 			}
 			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to create MCP config: %v", err))
@@ -1970,6 +1980,7 @@ func (h *MCPHandler) addMCPClient(ctx *fasthttp.RequestCtx) {
 		schemasConfig := &schemas.MCPClientConfig{
 			ID:                     req.ClientID,
 			Name:                   req.Name,
+			EndpointSlug:           req.EndpointSlug,
 			IsCodeModeClient:       req.IsCodeModeClient,
 			IsPingAvailable:        &isPingAvailable,
 			NeedsSessionStickiness: req.NeedsSessionStickiness,
@@ -2020,6 +2031,14 @@ func (h *MCPHandler) addMCPClient(ctx *fasthttp.RequestCtx) {
 		if err := h.store.ConfigStore.CreateMCPClientConfig(ctx, schemasConfig); err != nil {
 			if errors.Is(err, configstore.ErrAlreadyExists) {
 				SendError(ctx, fasthttp.StatusConflict, "An MCP client with this name already exists")
+				return
+			}
+			if errors.Is(err, configstore.ErrMCPEndpointSlugExists) {
+				SendError(ctx, fasthttp.StatusConflict, "An MCP client with this endpoint slug already exists")
+				return
+			}
+			if errors.Is(err, configstore.ErrMCPEndpointSlugInvalid) {
+				SendError(ctx, fasthttp.StatusBadRequest, "Could not derive an endpoint slug from the name; provide an endpoint_slug")
 				return
 			}
 			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to create MCP config: %v", err))
@@ -2244,6 +2263,7 @@ func (h *MCPHandler) addMCPClient(ctx *fasthttp.RequestCtx) {
 	schemasConfig := &schemas.MCPClientConfig{
 		ID:                     req.ClientID,
 		Name:                   req.Name,
+		EndpointSlug:           req.EndpointSlug,
 		IsCodeModeClient:       req.IsCodeModeClient,
 		ConnectionType:         schemas.MCPConnectionType(req.ConnectionType),
 		ConnectionString:       req.ConnectionString,
@@ -2268,6 +2288,14 @@ func (h *MCPHandler) addMCPClient(ctx *fasthttp.RequestCtx) {
 		if err := h.store.ConfigStore.CreateMCPClientConfig(ctx, schemasConfig); err != nil {
 			if errors.Is(err, configstore.ErrAlreadyExists) {
 				SendError(ctx, fasthttp.StatusConflict, "An MCP client with this name already exists")
+				return
+			}
+			if errors.Is(err, configstore.ErrMCPEndpointSlugExists) {
+				SendError(ctx, fasthttp.StatusConflict, "An MCP client with this endpoint slug already exists")
+				return
+			}
+			if errors.Is(err, configstore.ErrMCPEndpointSlugInvalid) {
+				SendError(ctx, fasthttp.StatusBadRequest, "Could not derive an endpoint slug from the name; provide an endpoint_slug")
 				return
 			}
 			SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to create MCP config: %v", err))
@@ -3696,6 +3724,14 @@ func (h *MCPHandler) completeMCPClientOAuth(ctx *fasthttp.RequestCtx) {
 						SendError(ctx, fasthttp.StatusConflict, "An MCP client with this name already exists")
 						return
 					}
+					if errors.Is(err, configstore.ErrMCPEndpointSlugExists) {
+						SendError(ctx, fasthttp.StatusConflict, "An MCP client with this endpoint slug already exists")
+						return
+					}
+					if errors.Is(err, configstore.ErrMCPEndpointSlugInvalid) {
+						SendError(ctx, fasthttp.StatusBadRequest, "Could not derive an endpoint slug from the name; provide an endpoint_slug")
+						return
+					}
 					SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to create MCP config: %v", err))
 					return
 				}
@@ -3828,6 +3864,14 @@ func (h *MCPHandler) completeMCPClientOAuth(ctx *fasthttp.RequestCtx) {
 			if err := h.store.ConfigStore.CreateMCPClientConfig(ctx, mcpClientConfig); err != nil {
 				if errors.Is(err, configstore.ErrAlreadyExists) {
 					SendError(ctx, fasthttp.StatusConflict, "An MCP client with this name already exists")
+					return
+				}
+				if errors.Is(err, configstore.ErrMCPEndpointSlugExists) {
+					SendError(ctx, fasthttp.StatusConflict, "An MCP client with this endpoint slug already exists")
+					return
+				}
+				if errors.Is(err, configstore.ErrMCPEndpointSlugInvalid) {
+					SendError(ctx, fasthttp.StatusBadRequest, "Could not derive an endpoint slug from the name; provide an endpoint_slug")
 					return
 				}
 				SendError(ctx, fasthttp.StatusInternalServerError, fmt.Sprintf("Failed to create MCP config: %v", err))
